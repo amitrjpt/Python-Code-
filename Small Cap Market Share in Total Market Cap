@@ -1,0 +1,70 @@
+import yfinance as yf
+import pandas as pd
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+import numpy as np
+
+print("📥 Downloading data...")
+
+# ✅ Ticker Download
+nifty = yf.download('^BSEsn', start='2015-01-01')
+smallcap = yf.download('BSE-SMLCAP.BO', start='2015-01-01')
+
+# ✅ Check if download successful
+if nifty.empty or smallcap.empty:
+    print("❌ Error: Could not download one or both tickers.")
+    exit()
+
+# ✅ Use 'Close' and ME for resampling
+nifty_monthly = nifty['Close'].resample('ME').last()
+smallcap_monthly = smallcap['Close'].resample('ME').last()
+
+# ✅ Monthly returns with fill_method=None
+nifty_returns = nifty_monthly.pct_change(fill_method=None)
+smallcap_returns = smallcap_monthly.pct_change(fill_method=None)
+
+# ✅ Simulated share with correct shape
+np.random.seed(42)
+simulated_share = (
+    0.12 +
+    0.06 * np.sin(np.linspace(0, 25, len(nifty_returns))) +
+    0.01 * np.random.randn(len(nifty_returns))
+)
+
+# ✅ Make sure everything is 1D Series
+df = pd.DataFrame({
+    'Nifty_Returns': nifty_returns.values.flatten(),
+    'Smallcap_Returns': smallcap_returns.values.flatten(),
+    'Smallcap_Share': simulated_share
+}, index=nifty_returns.index).dropna()
+
+# ✅ Threshold logic
+high = df['Smallcap_Share'].quantile(0.9)
+low = df['Smallcap_Share'].quantile(0.1)
+
+# ✅ Show performance
+print("\n📈 Jab Smallcap Share HIGH hota hai (Top 10%):")
+print(df[df['Smallcap_Share'] > high][['Nifty_Returns', 'Smallcap_Returns']].mean())
+
+print("\n📉 Jab Smallcap Share LOW hota hai (Bottom 10%):")
+print(df[df['Smallcap_Share'] < low][['Nifty_Returns', 'Smallcap_Returns']].mean())
+
+# ✅ Plotting with proper monthly formatting
+plt.figure(figsize=(12, 6))
+plt.plot(df.index, df['Smallcap_Share'], color='purple', label='Simulated Smallcap Share')
+plt.axhline(high, color='red', linestyle='--', label='High Threshold')
+plt.axhline(low, color='green', linestyle='--', label='Low Threshold')
+
+plt.title("Smallcap Market Share (Simulated)")
+plt.xlabel("Date")
+plt.ylabel("Simulated Share")
+plt.grid(True)
+plt.legend()
+
+# ✅ Format x-axis as monthly ticks
+plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%b %Y'))  # e.g. Jan 2015
+plt.gca().xaxis.set_major_locator(mdates.MonthLocator(interval=3))  # show every 3rd month
+plt.xticks(rotation=45)
+
+plt.tight_layout()
+plt.show()
